@@ -12,13 +12,18 @@ import {
   Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { createClient } from '@supabase/supabase-js';
 
 // Supabase configuration
 const SUPABASE_URL = 'https://evqzcxncnicdevygbqxd.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2cXpjeG5jbmljZGV2eWdicXhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ5NzE4NjAsImV4cCI6MjA2MDU0Nzg2MH0.X4Uma8zC5nwycoT9LhcOwqqrCDsUxSWUAM1Ne-eHXkI';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// API headers for Supabase
+const apiHeaders = {
+  'apikey': SUPABASE_KEY,
+  'Authorization': `Bearer ${SUPABASE_KEY}`,
+  'Content-Type': 'application/json',
+  'Prefer': 'return=representation'
+};
 
 const FileManager = () => {
   const [files, setFiles] = useState([]);
@@ -32,31 +37,33 @@ const FileManager = () => {
     fetchFiles();
   }, []);
 
-  // Function to fetch files from Supabase
+  // Function to fetch files from Supabase using fetch API
   const fetchFiles = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('files')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching files:', error);
-        Alert.alert('Error', 'Failed to load files');
-      } else {
-        setFiles(data || []);
+      
+      // Using fetch API instead of Supabase client
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/files?order=created_at.desc`, {
+        method: 'GET',
+        headers: apiHeaders
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API call failed with status: ${response.status}`);
       }
+      
+      const data = await response.json();
+      setFiles(data || []);
     } catch (error) {
-      console.error('Unexpected error:', error);
-      Alert.alert('Error', 'An unexpected error occurred');
+      console.error('Error fetching files:', error);
+      Alert.alert('Error', 'Failed to load files');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // Function to delete a file
+  // Function to delete a file using fetch API
   const deleteFile = async (id) => {
     Alert.alert(
       'Delete File',
@@ -69,22 +76,23 @@ const FileManager = () => {
           onPress: async () => {
             try {
               setLoading(true);
-              const { error } = await supabase
-                .from('files')
-                .delete()
-                .eq('id', id);
-
-              if (error) {
-                console.error('Error deleting file:', error);
-                Alert.alert('Error', 'Failed to delete file');
-              } else {
-                // Remove the file from the state
-                setFiles(files.filter(file => file.id !== id));
-                Alert.alert('Success', 'File deleted successfully');
+              
+              // Using fetch API for deletion
+              const response = await fetch(`${SUPABASE_URL}/rest/v1/files?id=eq.${id}`, {
+                method: 'DELETE',
+                headers: apiHeaders
+              });
+              
+              if (!response.ok) {
+                throw new Error(`Delete operation failed with status: ${response.status}`);
               }
+              
+              // Remove the file from the state
+              setFiles(files.filter(file => file.id !== id));
+              Alert.alert('Success', 'File deleted successfully');
             } catch (error) {
-              console.error('Unexpected error:', error);
-              Alert.alert('Error', 'An unexpected error occurred');
+              console.error('Error deleting file:', error);
+              Alert.alert('Error', 'Failed to delete file');
             } finally {
               setLoading(false);
             }
@@ -108,6 +116,8 @@ const FileManager = () => {
 
   // Function to determine file type from filename
   const getFileType = (filename) => {
+    if (!filename) return 'other';
+    
     const extension = filename.split('.').pop().toLowerCase();
     const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
     const documentExtensions = ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx'];
@@ -137,6 +147,8 @@ const FileManager = () => {
 
   // Function to format the date
   const formatDate = (dateString) => {
+    if (!dateString) return '';
+    
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
